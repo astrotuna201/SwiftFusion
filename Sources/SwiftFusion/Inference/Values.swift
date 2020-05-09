@@ -13,41 +13,93 @@
 // limitations under the License.
 import TensorFlow
 
-/// The class that holds Key-Value pairs.
+/// A dictionary of type-erased differentiable values.
+///
+/// Is differentiable, with tangent values represented as sparse `SparseVector`s, so that we can
+/// efficiently represent derivatives of functions that access few elements.
 public struct Values: Differentiable & KeyPathIterable {
 
-  public typealias ScalarType = Double
+  /// MARK: - Storage for the dictionary of values.
 
-  /// MARK: - Stored properties
-
+  /// The differentiable values.
   private var values: [AnyDifferentiable] = []
 
-  /// Dictionary from Key to index
-  @noDerivative private var indices: [Int: Int] = [:]
+  /// Dictionary from keys to their corresponding index in `values`.
+  @noDerivative private var valueIndices: [Int: Int] = [:]
 
-  @noDerivative private var errorDimension: Int = 0
-  @noDerivative private var ranges: [Int: Range<Int>] = [:]
+  /// MARK: - Differentiable conformance and related properties and helpers.
 
-  /// MARK: - Differentiable conformance
-
+  /// The product space of the tangent spaces of `values`, represented as a sparse `SparseVector`.
+  ///
+  /// If the dimensions of the tangent spaces of `values` are `n0`, `n1`, etc, then:
+  /// - The first `n0` components of the `SparseVector` are the components of the tangent space of
+  ///   `values[0]`.
+  /// - The next `n1` components of the `SparseVector` are the components of the tangent space of
+  ///   `values[1]`.
+  /// - etc.
   public typealias TangentVector = SparseVector
 
-  public mutating func move(along direction: TangentVector) {
-    // gonna need some clever casting or constraints here
-    fatalError("unimplemented")
+  /// Dimension of the tangent space.
+  ///
+  /// This is `n0 + n1 + ...`, where `n0`, `n1`, etc are defined in the `TangentVector` comment.
+  @noDerivative public private(set) var tangentDimension: Int = 0
+
+  /// `tangentOffsets[i]` is the offset of the tangent space of `values[i]` within `Values`'
+  /// tangent space.
+  ///
+  /// The elements are:
+  /// - 0,
+  /// - n0,
+  /// - n0 + n1,
+  /// - etc,
+  /// where `n0`, `n1`, etc are defined in the `TangentVector` comment.
+  @noDerivative private var tangentOffsets: [Int] = []
+
+  /// The indices of the tangent subspace corresponding to `values[valueIndex]`.
+  private func tangentIndices(_ valueIndex: Int) -> Range<Int> {
+    let startIndex = tangentOffsets[valueIndex]
+    let endIndex: Int
+    if valueIndex < tangentOffsets.count - 1 {
+      endIndex = tangentOffsets[valueIndex + 1]
+    } else {
+      endIndex = tangentDimension
+    }
+    return startIndex..<endIndex
   }
 
-  // MARK: - Subscript and its derivative
+  /// `makeTangentVector[i]` produces a type-erased tangent vector for `values[i]`.
+  private var makeTangentVector: [(SparseVector.Block) -> AnyDerivative] = []
 
+  /// Moves `self` along the given `direction`.
+  ///
+  /// Precondition: `direction` is represented as a single block spanning the entire tangent space.
+  /// TODO: We can lift the precondition by handling all the other cases in the implementation.
+  public mutating func move(along direction: SparseVector) {
+    precondition(direction.blocks.count == 1)
+    let block = direction.blocks[0]
+    precondition(block.startIndex == 0)
+    precondition(block.endIndex == tangentDimension)
+
+    for valueIndex in values.indices {
+      let tangentVector = makeTangentVector[valueIndex](block[tangentIndices(valueIndex)])
+      values[valueIndex].move(along: tangentVector)
+    }
+  }
+
+  // MARK: - Subscript and its derivative.
+
+  /// Access the value at `key`, with type `type`.
+  ///
+  /// Precondition: The value actually has type `type`.
   @differentiable
   public subscript<T: Differentiable>(key: Int, as type: T.Type) -> T
     where T.TangentVector: FixedDimensionVector
   {
     get {
-      return values[indices[key]!].baseAs(type)
+      return values[valueIndices[key]!].baseAs(type)
     }
     set(newValue) {
-      values[indices[key]!] = AnyDifferentiable(newValue)
+      values[valueIndices[key]!] = AnyDifferentiable(newValue)
     }
   }
 
@@ -57,42 +109,83 @@ public struct Values: Differentiable & KeyPathIterable {
     -> (value: T, pullback: (T.TangentVector) -> SparseVector)
     where T.TangentVector: FixedDimensionVector
   {
-    let block = ranges[key]!
-    return (self[key, as: type], { SparseVector($0.scalars, block: block) })
+    let valueIndex = valueIndices[key]!
+    let indices = tangentIndices(valueIndex)
+    return (
+      values[valueIndex].baseAs(type),
+      // This pullback maps `t: T.TangentVector` to `(0, ..., 0, t0, ..., tn, 0, ..., 0)`.
+      { t in SparseVector(t.scalars, indices: indices) }
+    )
   }
 
-  // MARK: - Unorganized
+  // MARK: - Initialization and insertion.
 
+  /// Creates an empty `Values`.
+  public init() {}
+
+  /// Inserts `value` at `key`.
+  public mutating func insert<T: Differentiable>(_ key: Int, _ value: T) where T.TangentVector: FixedDimensionVector {
+    precondition(valueIndices[key] == nil)
+    self.valueIndices[key] = self.values.count
+    self.values.append(AnyDifferentiable(value))
+    self.makeTangentVector.append({ block in AnyDerivative(T.TangentVector(block)) })
+    self.tangentOffsets.append(tangentDimension)
+    tangentDimension += T.TangentVector.dimension
+    checkInvariants()
+  }
+
+  /// MARK: - Public convenience properties.
+
+  /// The keys.
   public var keys: Dictionary<Int, Int>.Keys {
     get {
-      indices.keys
+      valueIndices.keys
     }
   }
-  /// Default initializer
-  public init() { }
 
-  /// Returns the number of variables.
+  /// The count of variables.
   public var count: Int {
     return values.count
   }
-  
-  /// Insert a key value pair
-  public mutating func insert<T: Differentiable>(_ key: Int, _ value: T) where T.TangentVector: FixedDimensionVector {
-    assert(indices[key] == nil)
 
-    let range = errorDimension..<(errorDimension + T.TangentVector.dimension)
-    errorDimension += T.TangentVector.dimension
+  // MARK: - Private helpers.
 
-    self.indices[key] = self.values.count
-    self.ranges[key] = range
-    self.values.append(AnyDifferentiable(value))
+  /// Asserts that invariants hold.
+  ///
+  /// Note that this is `O(n)` in the number of values, so checking invariants in a loop that
+  /// inserts `n` values is `O(n^2)`. This is okay because assertions are disabled in optimized
+  /// builds.
+  private func checkInvariants() {
+    assert(values.count == makeTangentVector.count)
+    assert(values.count == valueIndices.count)
+    assert(values.count == tangentOffsets.count)
+    for i in valueIndices.values {
+      assert(values.indices.contains(i))
+    }
+    for i in tangentOffsets.indices {
+      if i < tangentOffsets.count - 1 {
+        assert(tangentOffsets[i] < tangentOffsets[i + 1])
+      } else {
+        assert(tangentOffsets[i] < tangentDimension)
+      }
+    }
   }
-  
 }
 
 extension Values: CustomStringConvertible {
   public var description: String {
-    "TODO"
+    // Maps value indices to keys. This is the reverse of the `valueIndices` dictionary.
+    var keys: [Int: Int] = [:]
+    for (key, value) in valueIndices {
+      keys[value] = key
+    }
+
+    var description: String = "Values(\n"
+    for (valueIndex, value) in values.enumerated() {
+      description += "  \(keys[valueIndex]!) -> \(value.base)\n"
+    }
+    description += ")"
+    return description
   }
 }
 

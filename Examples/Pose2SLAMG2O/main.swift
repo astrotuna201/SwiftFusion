@@ -64,14 +64,12 @@ func main() {
   // general purpose solver exists.
   var val = problem.initialGuess
   print("Initial error: \(problem.graph.error(val))")
-  for _ in 0..<50 {
+  for _ in 0..<1 {
     let gfg = problem.graph.linearization(val)
     let optimizer = CGLS(precision: 1e-6, max_iteration: 200)
-    var dx = Vector(zeros: 3 * val.count)
+    var dx = Vector(zeros: val.tangentDimension)
     optimizer.optimize(linearMap: gfg.linearMap, bias: gfg.bias, initial: &dx)
-    for i in 0..<val.count {
-      val[i, as: Pose2.self].move(along: Vector3(dx.scalars[3 * i], dx.scalars[3 * i + 1], dx.scalars[3 * i + 2]))
-    }
+    val.move(along: SparseVector(dx.scalars))
     print("Current error: \(problem.graph.error(val))")
   }
   print("Final error: \(problem.graph.error(val))")

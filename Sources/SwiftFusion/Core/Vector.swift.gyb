@@ -4,6 +4,7 @@ public protocol FixedDimensionVector {
   static var dimension: Int { get }
   static var standardBasis: [Self] { get }
   var scalars: [Double] { get }
+  init<T: Collection>(_ scalars: T) where T.Element == Double
 }
 
 % dims = [1, 2, 3]
@@ -100,6 +101,14 @@ extension Vector${dim}: FixedDimensionVector {
 
   public var scalars: [Double] {
     return [${', '.join(coordinates)}]
+  }
+
+  public init<T: Collection>(_ scalars: T) where T.Element == Double {
+    var index = scalars.startIndex
+    % for coordinate in coordinates:
+    self.${coordinate} = scalars[index]
+    index = scalars.index(after: index)
+    % end
   }
 }
 
