@@ -15,16 +15,57 @@ import TensorFlow
 
 /// The class that holds Key-Value pairs.
 public struct Values: Differentiable & KeyPathIterable {
+
   public typealias ScalarType = Double
-  var _values: [AnyDifferentiable] = []
-  
+
+  /// MARK: - Stored properties
+
+  private var values: [AnyDifferentiable] = []
+
   /// Dictionary from Key to index
-  @noDerivative
-  var _indices: Dictionary<Int, Int> = [:]
-  
+  @noDerivative private var indices: [Int: Int] = [:]
+
+  @noDerivative private var errorDimension: Int = 0
+  @noDerivative private var ranges: [Int: Range<Int>] = [:]
+
+  /// MARK: - Differentiable conformance
+
+  public typealias TangentVector = SparseVector
+
+  public mutating func move(along direction: TangentVector) {
+    // gonna need some clever casting or constraints here
+    fatalError("unimplemented")
+  }
+
+  // MARK: - Subscript and its derivative
+
+  @differentiable
+  public subscript<T: Differentiable>(key: Int, as type: T.Type) -> T
+    where T.TangentVector: FixedDimensionVector
+  {
+    get {
+      return values[indices[key]!].baseAs(type)
+    }
+    set(newValue) {
+      values[indices[key]!] = AnyDifferentiable(newValue)
+    }
+  }
+
+  @derivative(of: subscript)
+  @usableFromInline
+  func vjpSubscript<T: Differentiable>(key: Int, as type: T.Type)
+    -> (value: T, pullback: (T.TangentVector) -> SparseVector)
+    where T.TangentVector: FixedDimensionVector
+  {
+    let block = ranges[key]!
+    return (self[key, as: type], { SparseVector($0.scalars, block: block) })
+  }
+
+  // MARK: - Unorganized
+
   public var keys: Dictionary<Int, Int>.Keys {
     get {
-      _indices.keys
+      indices.keys
     }
   }
   /// Default initializer
@@ -32,34 +73,26 @@ public struct Values: Differentiable & KeyPathIterable {
 
   /// Returns the number of variables.
   public var count: Int {
-    return _values.count
-  }
-  
-  /// The subscript operator, with some indirection
-  /// Should be replaced after Dictionary is in
-  @differentiable
-  public subscript(key: Int) -> AnyDifferentiable {
-    get {
-      _values[_indices[key]!]
-    }
-    set(newVal) {
-      _values[_indices[key]!] = newVal
-    }
+    return values.count
   }
   
   /// Insert a key value pair
-  public mutating func insert(_ key: Int, _ val: AnyDifferentiable) {
-    assert(_indices[key] == nil)
-    
-    self._indices[key] = self._values.count
-    self._values.append(val)
+  public mutating func insert<T: Differentiable>(_ key: Int, _ value: T) where T.TangentVector: FixedDimensionVector {
+    assert(indices[key] == nil)
+
+    let range = errorDimension..<(errorDimension + T.TangentVector.dimension)
+    errorDimension += T.TangentVector.dimension
+
+    self.indices[key] = self.values.count
+    self.ranges[key] = range
+    self.values.append(AnyDifferentiable(value))
   }
   
 }
 
 extension Values: CustomStringConvertible {
   public var description: String {
-    "Values(\n\(_indices.map { "Key: \($0), J: \(_values[$1])\n"}.reduce("", { $0 + $1 }) )"
+    "TODO"
   }
 }
 

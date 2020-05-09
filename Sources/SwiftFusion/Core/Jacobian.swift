@@ -34,3 +34,11 @@ public func jacobian<A: Differentiable, B: TangentStandardBasis>(
   let pb = pullback(at: p, in: f)
   return basisVectors.map { pb($0) }
 }
+
+public func valueWithJacobian<B: Differentiable>(
+  of f: @differentiable(Values) -> B,
+  at p: Values
+) -> (value: B, jacobian: SparseMatrix) where B.TangentVector: FixedDimensionVector {
+  let (value, pb) = valueWithPullback(at: p, in: f)
+  return (value: value, jacobian: SparseMatrix(rows: B.TangentVector.standardBasis.map(pb)))
+}

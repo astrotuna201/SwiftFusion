@@ -30,21 +30,19 @@ public struct NonlinearFactorGraph {
   public static func += (lhs: inout Self, rhs: NonlinearFactor) {
     lhs.factors.append(rhs)
   }
-  
-  /// linearize the nonlinear factor graph to a linear factor graph
-  public func linearize(_ values: Values) -> GaussianFactorGraph {
-    var gfg = GaussianFactorGraph()
-    
-    for i in factors {
-      let linearized = i.linearize(values)
-      
-      // Assertion for the shape of Jacobian
-      assert(linearized.jacobians.map { $0.shape.count == 2 }.reduce(true, { $0 && $1 }))
-      
-      gfg += linearized
+
+  public func linearization(_ values: Values) -> (linearMap: SparseMatrix, bias: Vector) {
+    // TODO: Reserve capacity.
+    var linearMap = SparseMatrix.zero
+    var bias = Vector.zero
+    var rowOffset = 0
+    for factor in factors {
+      let (factorLinearMap, factorBias) = factor.linearization(values)
+      linearMap += factorLinearMap.offsetting(rowBy: rowOffset)
+      bias.scalars.append(contentsOf: factorBias.scalars)
+      rowOffset += factorBias.scalars.count
     }
-    
-    return gfg
+    return (linearMap: linearMap, bias: bias)
   }
 
   /// Returns the total error at `values`.

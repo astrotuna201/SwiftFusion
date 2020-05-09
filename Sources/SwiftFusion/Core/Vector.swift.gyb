@@ -1,5 +1,11 @@
 import TensorFlow
 
+public protocol FixedDimensionVector {
+  static var dimension: Int { get }
+  static var standardBasis: [Self] { get }
+  var scalars: [Double] { get }
+}
+
 % dims = [1, 2, 3]
 % for dim in dims:
 % coordinates = ['x', 'y', 'z'][0:dim]
@@ -77,6 +83,23 @@ extension Vector${dim}: ElementaryFunctions {
     result.${coordinate} = ${coordinate} * ${coordinate}
     % end
     return result
+  }
+}
+
+/// Conformance to `FixedDimensionVector`.
+extension Vector${dim}: FixedDimensionVector {
+  public static var dimension: Int { return ${dim} }
+
+  public static var standardBasis: [Self] {
+    % for coordinate in coordinates:
+    var basis${coordinate}: Self = .zero
+    basis${coordinate}.${coordinate} = 1
+    % end
+    return [${', '.join(['basis%s' % coordinate for coordinate in coordinates])}]
+  }
+
+  public var scalars: [Double] {
+    return [${', '.join(coordinates)}]
   }
 }
 

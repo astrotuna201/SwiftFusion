@@ -15,46 +15,12 @@ import TensorFlow
 
 /// The type of error vector returned by the Factor
 /// Should be VectorN, but now just tensor as we do not have fixed size Tensors
-public typealias Error = Tensor<Double>
+public struct FactorError {
+  var vector: Vector
+}
 
 /// Collection of all errors returned by a Factor Graph
-public typealias Errors = Array<Error>
-
-/// Extending Array for Error type
-/// This simplifies the implementation for `Errors`, albeit in a less self-contained manner
-/// TODO: change this to a concrete `struct Errors` and implement all the protocols
-extension Array where Element == Error {
-  public static func - (_ a: Self, _ b: Self) -> Self {
-    var result = a
-    let _ = result.indices.map { result[$0] = a[$0] + b[$0] }
-    return result
-  }
-  
-  /// Calculates the L2 norm
-  public var norm: Double {
-    get {
-      self.map { $0.squared().sum().scalar! }.reduce(0.0, { $0 + $1 })
-    }
-  }
-  
-  /// Errors + scalar
-  static func + (_ lhs: Self, _ rhs: Double) -> Self {
-    var result = lhs
-    let _ = result.indices.map { result[$0] += rhs }
-    return result
-  }
-  
-  /// Errors + Errors
-  static func + (_ lhs: Self, _ rhs: Self) -> Self {
-    var result = lhs
-    let _ = result.indices.map { result[$0] += rhs[$0] }
-    return result
-  }
-  
-  /// scalar * Errors
-  static func * (_ lhs: Double, _ rhs: Self) -> Self {
-    var result = rhs
-    let _ = result.indices.map { result[$0] *= lhs }
-    return result
-  }
+public struct GraphErrors {
+  var offsets: [Int]
+  var vector: Vector
 }

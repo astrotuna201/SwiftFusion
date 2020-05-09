@@ -36,7 +36,7 @@ struct G2OFactorGraph: G2OReader {
   var graph: NonlinearFactorGraph = NonlinearFactorGraph()
 
   public mutating func addInitialGuess(index: Int, pose: Pose2) {
-    initialGuess.insert(index, AnyDifferentiable(pose))
+    initialGuess.insert(index, pose)
   }
 
   public mutating func addMeasurement(frameIndex: Int, measuredIndex: Int, pose: Pose2) {
@@ -64,18 +64,13 @@ func main() {
   // general purpose solver exists.
   var val = problem.initialGuess
   print("Initial error: \(problem.graph.error(val))")
-  for _ in 0..<10 {
-    let gfg = problem.graph.linearize(val)
-    let optimizer = CGLS(precision: 1e-6, max_iteration: 20)
-    var dx = VectorValues()
+  for _ in 0..<50 {
+    let gfg = problem.graph.linearization(val)
+    let optimizer = CGLS(precision: 1e-6, max_iteration: 200)
+    var dx = Vector(zeros: 3 * val.count)
+    optimizer.optimize(linearMap: gfg.linearMap, bias: gfg.bias, initial: &dx)
     for i in 0..<val.count {
-      dx.insert(i, Tensor<Double>(shape: [3, 1], scalars: [0, 0, 0]))
-    }
-    optimizer.optimize(gfg: gfg, initial: &dx)
-    for i in 0..<val.count {
-      var p = val[i].baseAs(Pose2.self)
-      p.move(along: Vector3(dx[i].reshaped(toShape: [3])))
-      val[i] = AnyDifferentiable(p)
+      val[i, as: Pose2.self].move(along: Vector3(dx.scalars[3 * i], dx.scalars[3 * i + 1], dx.scalars[3 * i + 2]))
     }
     print("Current error: \(problem.graph.error(val))")
   }

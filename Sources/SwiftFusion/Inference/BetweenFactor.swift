@@ -68,7 +68,7 @@ public struct BetweenFactor: NonlinearFactor {
   @differentiable(wrt: values)
   public func error(_ values: Values) -> Double {
     let error = between(
-      between(values[key2].baseAs(Pose2.self), values[key1].baseAs(Pose2.self)),
+      between(values[key2, as: Pose2.self], values[key1, as: Pose2.self]),
         difference
     )
     
@@ -78,20 +78,15 @@ public struct BetweenFactor: NonlinearFactor {
   @differentiable(wrt: values)
   public func errorVector(_ values: Values) -> Vector3 {
     let error = between(
-      between(values[key2].baseAs(Pose2.self), values[key1].baseAs(Pose2.self)),
+      between(values[key2, as: Pose2.self], values[key1, as: Pose2.self]),
       difference
     )
     
     return Vector3(error.rot.theta, error.t.x, error.t.y)
   }
-  
-  public func linearize(_ values: Values) -> JacobianFactor {
-    let j = jacobian(of: self.errorVector, at: values)
-    
-    let j1 = Tensor<Double>(stacking: (0..<3).map { i in (j[i]._values[values._indices[key1]!].base as! Pose2.TangentVector).tensor.reshaped(to: TensorShape([3])) })
-    let j2 = Tensor<Double>(stacking: (0..<3).map { i in (j[i]._values[values._indices[key2]!].base as! Pose2.TangentVector).tensor.reshaped(to: TensorShape([3])) })
-    
-    // TODO: remove this negative sign
-    return JacobianFactor(keys, [j1, j2], -errorVector(values).tensor.reshaped(to: [3, 1]))
+
+  public func linearization(_ values: Values) -> (linearMap: SparseMatrix, bias: Vector) {
+    let (error, linearMap) = valueWithJacobian(of: self.errorVector, at: values)
+    return (linearMap: linearMap, bias: Vector(error.scalars).scaled(by: -1))
   }
 }
