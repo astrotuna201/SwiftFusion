@@ -1,4 +1,6 @@
-public struct Vector: Differentiable {
+import TensorFlow
+
+public struct Vector: Equatable, Differentiable {
   @differentiable
   public var scalars: [Double]
 
@@ -98,5 +100,11 @@ extension Vector {
 extension Vector {
   public init(zeros dimension: Int) {
     self.init(Array(repeating: 0, count: dimension))
+  }
+}
+
+extension Vector {
+  public var tensor: Tensor<Double> {
+    return Tensor(shape: [scalars.count], scalars: scalars)
   }
 }

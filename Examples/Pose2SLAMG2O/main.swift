@@ -65,10 +65,10 @@ func main() {
   var val = problem.initialGuess
   print("Initial error: \(problem.graph.error(val))")
   for _ in 0..<1 {
-    let gfg = problem.graph.linearization(val)
-    let optimizer = CGLS(precision: 1e-6, max_iteration: 200)
+    let gfg = problem.graph.linearized(val)
+    let optimizer = CGLS(precision: 1e-6, max_iteration: 500)
     var dx = Vector(zeros: val.tangentDimension)
-    optimizer.optimize(linearMap: gfg.linearMap, bias: gfg.bias, initial: &dx)
+    optimizer.optimize(gfg: gfg, initial: &dx)
     val.move(along: SparseVector(dx.scalars))
     print("Current error: \(problem.graph.error(val))")
   }

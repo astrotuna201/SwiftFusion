@@ -38,5 +38,5 @@ public protocol NonlinearFactor: Factor {
   @differentiable(wrt: values)
   func error(_ values: Values) -> ScalarType
   
-  func linearization(_ values: Values) -> (linearMap: SparseMatrix, bias: Vector)
+  func linearized(_ values: Values) -> GaussianFactorGraph
 }

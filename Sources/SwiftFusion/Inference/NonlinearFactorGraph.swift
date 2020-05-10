@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import TensorFlow
 
 /// A factor graph for nonlinear problems
 /// TODO(fan): Add noise model
@@ -20,29 +19,25 @@ public struct NonlinearFactorGraph {
   
   public typealias FactorsType = Array<NonlinearFactor>
   
-  public var keys: KeysType = []
-  public var factors: FactorsType = []
-  
-  /// Default initializer
-  public init() { }
+  public private(set) var keys: KeysType = []
+  public private(set) var factors: FactorsType = []
+
+  /// Creates an empty `NonlinearFactorGraph`.
+  public init() {}
   
   /// Convenience operator for adding factor
   public static func += (lhs: inout Self, rhs: NonlinearFactor) {
     lhs.factors.append(rhs)
   }
 
-  public func linearization(_ values: Values) -> (linearMap: SparseMatrix, bias: Vector) {
+  /// Returns the `GaussianFactorGraph` obtanized by linearizing `self` at `values`.
+  public func linearized(_ values: Values) -> GaussianFactorGraph {
     // TODO: Reserve capacity.
-    var linearMap = SparseMatrix.zero
-    var bias = Vector.zero
-    var rowOffset = 0
+    var linearized = GaussianFactorGraph()
     for factor in factors {
-      let (factorLinearMap, factorBias) = factor.linearization(values)
-      linearMap += factorLinearMap.offsetting(rowBy: rowOffset)
-      bias.scalars.append(contentsOf: factorBias.scalars)
-      rowOffset += factorBias.scalars.count
+      linearized += factor.linearized(values)
     }
-    return (linearMap: linearMap, bias: bias)
+    return linearized
   }
 
   /// Returns the total error at `values`.

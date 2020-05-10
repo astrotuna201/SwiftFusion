@@ -3,32 +3,6 @@ import TensorFlow
 import XCTest
 
 final class NonlinearFactorGraphTests: XCTestCase {
-  /// test ATr
-  func testBasicOps() {
-    var fg = NonlinearFactorGraph()
-    
-    let bf1 = BetweenFactor(0, 1, Pose2(0.0,0.0, 0.0))
-    
-    fg += bf1
-    
-    var val = Values()
-    val.insert(0, AnyDifferentiable(Pose2(1.0, 1.0, 0.0)))
-    val.insert(1, AnyDifferentiable(Pose2(1.0, 1.0, .pi)))
-    
-    let gfg = fg.linearize(val)
-    
-    var vv = VectorValues()
-    
-    vv.insert(0, Tensor<Double>(shape:[3, 1], scalars: [0.0, 0.0, 0.0]))
-    vv.insert(1, Tensor<Double>(shape:[3, 1], scalars: [0.0, 0.0, 0.0]))
-    
-    let expected = Tensor<Double>(shape:[3, 1], scalars: [.pi, 0.0, 0.0])
-    
-    print("gfg = \(gfg)")
-    print("error = \(gfg.residual(vv).norm)")
-    assertEqual((gfg.residual(vv))[0], expected, accuracy: 1e-6)
-  }
-  
   /// test CGLS iterative solver
   func testCGLSPose2SLAM() {
     // Initial estimate for poses
@@ -51,27 +25,19 @@ final class NonlinearFactorGraphTests: XCTestCase {
     var val = Values()
     
     for i in 0..<5 {
-      val.insert(i, AnyDifferentiable(map[i]))
+      val.insert(i, map[i])
     }
     
     for _ in 0..<2 {
-      let gfg = fg.linearize(val)
+      let gfg = fg.linearized(val)
       
       let optimizer = CGLS(precision: 1e-6, max_iteration: 500)
       
-      var dx = VectorValues()
-      
-      for i in 0..<5 {
-        dx.insert(i, Tensor<Double>(shape: [3, 1], scalars: [0, 0, 0]))
-      }
+      var dx = Vector(zeros: val.tangentDimension)
       
       optimizer.optimize(gfg: gfg, initial: &dx)
       
-      for i in 0..<5 {
-        var p = val[i].baseAs(Pose2.self)
-        p.move(along: Vector3(dx[i].reshaped(toShape: [3])))
-        val[i] = AnyDifferentiable(p)
-      }
+      val.move(along: SparseVector(dx.scalars))
     }
     
     let dumpjson = { (p: Pose2) -> String in
@@ -84,14 +50,14 @@ final class NonlinearFactorGraphTests: XCTestCase {
     }
     print("]")
     
-    let map_final = (0..<5).map { val[$0].baseAs(Pose2.self) }
+    let map_final = (0..<5).map { val[$0, as: Pose2.self] }
     print("map = [")
     for v in map_final.indices {
       print("\(dumpjson(map_final[v]))\({ () -> String in if v == map_final.indices.endIndex - 1 { return "" } else { return "," } }())")
     }
     print("]")
     
-    let p5T1 = between(val[4].baseAs(Pose2.self), val[0].baseAs(Pose2.self))
+    let p5T1 = between(val[4, as: Pose2.self], val[0, as: Pose2.self])
 
     // Test condition: P_5 should be identical to P_1 (close loop)
     XCTAssertEqual(p5T1.t.norm, 0.0, accuracy: 1e-2)

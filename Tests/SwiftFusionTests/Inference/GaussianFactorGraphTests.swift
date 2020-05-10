@@ -1,40 +1,21 @@
 import SwiftFusion
-import TensorFlow
 import XCTest
 
-final class GaussianFactorGraphTests: XCTestCase {  
-  /// test ATr
-  func testTransposeMultiplication() {
-    let A = SimpleGaussianFactorGraph.create()
+final class GaussianFactorGraphTests: XCTestCase {
+  /// Test accumulating factors into a gaussian factor graph.
+  func testAccumulateFactors() {
+    var graph = GaussianFactorGraph()
+    let j1 = SparseMatrix([[1, 2], [3, 4]])
+    let j2 = SparseMatrix([[5, 6], [7, 8]])
+    let b1 = Vector([9, 10])
+    let b2 = Vector([11, 11])
+    graph += GaussianFactorGraph(jacobian: j1, bias: b1)
+    graph += GaussianFactorGraph(jacobian: j2, bias: b2)
 
-    var e = Errors()
-    e += [Vector2_t(0.0, 0.0)]
-    e += [Vector2_t(15.0, 0.0)]
-    e += [Vector2_t(0.0, -5.0)]
-    e += [Vector2_t(-7.5, -5.0)]
-
-    var expected = VectorValues()
-    expected.insert(1, Vector2_t(-37.5, -50.0))
-    expected.insert(2, Vector2_t(-150.0, 25.0))
-    expected.insert(0, Vector2_t(187.5, 25.0))
-
-    let actual = A.atr(e)
-    XCTAssertEqual(expected, actual)
-  }
-  
-  /// test Ax
-  func testMultiplication() {
-    let A = SimpleGaussianFactorGraph.create()
-
-    var expected = Errors()
-    expected += [Vector2_t(-1.0, -1.0)]
-    expected += [Vector2_t(2.0, -1.0)]
-    expected += [Vector2_t(0.0, 1.0)]
-    expected += [Vector2_t(-1.0, 1.5)]
-
-    let x = SimpleGaussianFactorGraph.correctDelta()
-
-    let actual = A * x
-    XCTAssertEqual(expected, actual)
+    XCTAssertTrue(graph.jacobian.blocksEqual((j1 + j2.offsetting(rowBy: 2))))
+    XCTAssertEqual(
+      graph.bias,
+      Vector([9, 10, 11, 12])
+    )
   }
 }

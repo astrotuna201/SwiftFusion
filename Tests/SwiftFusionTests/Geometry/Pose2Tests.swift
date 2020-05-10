@@ -166,12 +166,9 @@ final class Pose2Tests: XCTestCase {
       Pose2(x.rot, x.t)
     }
     for _ in 0..<10 {
-      let expected: Tensor<Double> = eye(rowCount: 3)
       assertEqual(
-        Tensor<Double>(stacking: jacobian(
-          of: identity,
-          at: Pose2(randomWithCovariance: eye(rowCount: 3))).map { $0.tensor }),
-        expected,
+        jacobian(of: identity, at: Pose2(randomWithCovariance: eye(rowCount: 3))).tensor,
+        SparseMatrix(eye: 3).tensor,
         accuracy: 1e-10
       )
     }
@@ -181,10 +178,9 @@ final class Pose2Tests: XCTestCase {
   func testDerivativeInverse() {
     for _ in 0..<10 {
       let pose = Pose2(randomWithCovariance: eye(rowCount: 3))
-      let expected = -pose.groupAdjointMatrix
       assertEqual(
-        Tensor<Double>(stacking: jacobian(of: { $0.inverse() }, at: pose).map { $0.tensor }),
-        expected,
+        jacobian(of: { $0.inverse() }, at: pose).tensor,
+        -pose.AdjointMatrix,
         accuracy: 1e-10
       )
     }
@@ -195,16 +191,16 @@ final class Pose2Tests: XCTestCase {
     for _ in 0..<10 {
       let lhs = Pose2(randomWithCovariance: eye(rowCount: 3))
       let rhs = Pose2(randomWithCovariance: eye(rowCount: 3))
-      let expectedWrtLhs = rhs.inverse().groupAdjointMatrix
-      let expectedWrtRhs: Tensor<Double> = eye(rowCount: 3)
+      let expectedWrtLhs = rhs.inverse().AdjointMatrix
+      let expectedWrtRhs = SparseMatrix(eye: 3)
       assertEqual(
-        Tensor<Double>(stacking: jacobian(of: { $0 * rhs }, at: lhs).map { $0.tensor }),
+        jacobian(of: { $0 * rhs }, at: lhs).tensor,
         expectedWrtLhs,
         accuracy: 1e-10
       )
       assertEqual(
-        Tensor<Double>(stacking: jacobian(of: { lhs * $0 }, at: rhs).map { $0.tensor }),
-        expectedWrtRhs,
+        jacobian(of: { lhs * $0 }, at: rhs).tensor,
+        expectedWrtRhs.tensor,
         accuracy: 1e-10
       )
     }
@@ -213,19 +209,14 @@ final class Pose2Tests: XCTestCase {
   /// tests a simple identity Jacobian for Pose2
   func testJacobianPose2Identity() {
     let wT1 = Pose2(1, 0, 3.1415926 / 2.0), wT2 = Pose2(1, 0, 3.1415926 / 2.0)
-    let pts: [Pose2] = [wT1, wT2]
 
-    let f: @differentiable(_ pts: [Pose2]) -> Double = { (_ pts: [Pose2]) -> Double in
-      let d = between(pts[0], pts[1])
-
+    func f(_ p1: Pose2, _ p2: Pose2) -> Double {
+      let d = between(p1, p2)
       return d.rot.theta * d.rot.theta + d.t.x * d.t.x + d.t.y * d.t.y
     }
 
-    let j = jacobian(of: f, at: pts)
-    // print("J(f) = \(j[0].base as AnyObject)")
-    for item in j[0] {
-      XCTAssertEqual(item, Pose2.TangentVector.zero)
-    }
+    let j = jacobian(of: { f($0, wT2) }, at: wT1)
+    XCTAssertEqual(j.tensor, Tensor(zeros: [1, 3]))
   }
 
   /// Tests the jacobian of the `between` function.
@@ -236,25 +227,25 @@ final class Pose2Tests: XCTestCase {
     // Note that these numbers are a permutation of the corresponding numbers from GTSAM because
     // the SwiftFusion convention for tangent vector is (omega, v) while the GTSAM convention is
     // (v, omega).
-    let expectedWrtLhs = Tensor<Double>([
+    let expectedWrtLhs = SparseMatrix([
       [-1.0, 0.0,  0.0],
       [-2.0, 0.0, -1.0],
       [-2.0, 1.0,  0.0]
     ])
-    let expectedWrtRhs = Tensor<Double>([
+    let expectedWrtRhs = SparseMatrix([
       [1.0, 0.0, 0.0],
       [0.0, 1.0, 0.0],
       [0.0, 0.0, 1.0]
     ])
 
     assertEqual(
-      Tensor<Double>(stacking: jacobian(of: { between($0, wT2) }, at: wT1).map { $0.tensor }),
-      expectedWrtLhs,
+      jacobian(of: { between($0, wT2) }, at: wT1).tensor,
+      expectedWrtLhs.tensor,
       accuracy: 1e-10
     )
     assertEqual(
-      Tensor<Double>(stacking: jacobian(of: { between(wT1, $0) }, at: wT2).map { $0.tensor }),
-      expectedWrtRhs,
+      jacobian(of: { between(wT1, $0) }, at: wT2).tensor,
+      expectedWrtRhs.tensor,
       accuracy: 1e-10
     )
   }

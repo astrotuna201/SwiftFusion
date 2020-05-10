@@ -59,8 +59,8 @@ public struct PriorFactor: NonlinearFactor {
     return Vector3(error.rot.theta, error.t.x, error.t.y)
   }
 
-  public func linearization(_ values: Values) -> (linearMap: SparseMatrix, bias: Vector) {
-    let (error, linearMap) = valueWithJacobian(of: self.errorVector, at: values)
-    return (linearMap: linearMap, bias: Vector(error.scalars).scaled(by: -1))
+  public func linearized(_ values: Values) -> GaussianFactorGraph {
+    let (error, jacobian) = valueWithJacobian(of: self.errorVector, at: values)
+    return GaussianFactorGraph(jacobian: jacobian, bias: Vector(error.scalars).scaled(by: -1))
   }
 }

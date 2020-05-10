@@ -184,7 +184,7 @@ extension Pose2 {
   }
 
   /// The Adjoint group action of `self` on the tangent space, as a linear map.
-  public var groupAdjoint: (Vector3) -> Vector3 {
+  public var Adjoint: (Vector3) -> Vector3 {
     {
       let (w, v) = Self.decomposed(tangentVector: $0)
       let tPerp = Vector2(-t.y, t.x)
@@ -193,8 +193,8 @@ extension Pose2 {
   }
 
   /// The Adjoint group action of `self` on the tangent space, as a matrix.
-  public var groupAdjointMatrix: Tensor<Double> {
-    Tensor(stacking: Pose2.tangentStandardBasis.map { groupAdjoint($0).tensor }).transposed()
+  public var AdjointMatrix: Tensor<Double> {
+    Tensor(stacking: Pose2.tangentStandardBasis.map { Adjoint($0).tensor }).transposed()
   }
 
   /// Group inverse.

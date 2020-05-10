@@ -7,6 +7,15 @@ public protocol FixedDimensionVector {
   init<T: Collection>(_ scalars: T) where T.Element == Double
 }
 
+extension Double: FixedDimensionVector {
+  public static var dimension: Int { return 1 }
+  public static var standardBasis: [Double] { return [1] }
+  public var scalars: [Double] { return [self] }
+  public init<T: Collection>(_ scalars: T) where T.Element == Double {
+    self = scalars.first!
+  }
+}
+
 % dims = [1, 2, 3]
 % for dim in dims:
 % coordinates = ['x', 'y', 'z'][0:dim]

@@ -1,3 +1,5 @@
+import TensorFlow
+
 /// A vector stored as a collection of blocks.
 public struct SparseVector {
   /// The indices of the blocks.
@@ -39,6 +41,21 @@ extension SparseVector {
     precondition(scalars.count == indices.count)
     self.scalars = scalars
     self.blockIndices = [indices]
+  }
+}
+
+/// Conversion to `Vector`.
+extension Vector {
+  /// Creates a `Vector` with the same value as `blockVector`.
+  public init(_ blockVector: SparseVector) {
+    self.scalars = Array(repeating: 0, count: blockVector.dimension)
+    var blockVectorScalarIndex = 0
+    for block in blockVector.blockIndices {
+      for resultVectorScalarIndex in block {
+        self.scalars[resultVectorScalarIndex] += blockVector.scalars[blockVectorScalarIndex]
+        blockVectorScalarIndex += 1
+      }
+    }
   }
 }
 
@@ -124,6 +141,12 @@ extension SparseVector {
   }
 }
 
+extension SparseVector {
+  public func offsetting(by offset: Int) -> SparseVector {
+    return SparseVector(scalars, blockIndices: blockIndices.map { $0.offsetting(by: offset) })
+  }
+}
+
 /// Differentiable conformance.
 extension SparseVector: Differentiable {
   public typealias TangentVector = Self
@@ -199,8 +222,8 @@ extension SparseVector: VectorProtocol {
   }
 }
 
-fileprivate struct MatrixRange {
-  let rowRange, columnRange: Range<Int>
+fileprivate struct MatrixRange: Equatable {
+  let rowIndices, columnIndices: Range<Int>
 }
 
 public struct SparseMatrix {
@@ -231,25 +254,82 @@ extension SparseMatrix {
     var blockIndices: [MatrixRange] = []
     blockIndices.reserveCapacity(rows[0].blockIndices.count)
     var rowOffset = 0
-    for columnRange in rows[0].blockIndices {
-      blockIndices.append(MatrixRange(rowRange: 0..<rows.count, columnRange: columnRange))
+    for columnIndices in rows[0].blockIndices {
+      blockIndices.append(MatrixRange(rowIndices: 0..<rows.count, columnIndices: columnIndices))
       for row in rows {
-        scalars.append(contentsOf: row.scalars[rowOffset..<(rowOffset + columnRange.count)])
+        scalars.append(contentsOf: row.scalars[rowOffset..<(rowOffset + columnIndices.count)])
       }
-      rowOffset += columnRange.count
+      rowOffset += columnIndices.count
     }
     self.init(scalars, blockIndices: blockIndices)
+  }
+
+  public init(_ rows: [[Double]], rowIndices: Range<Int>? = nil, columnIndices: Range<Int>? = nil) {
+    let rowIndices = rowIndices ?? 0..<rows.count
+    precondition(rowIndices.count == rows.count)
+
+    guard rows.count > 0 else {
+      self.init([], blockIndices: [])
+      return
+    }
+
+    let columnIndices = columnIndices ?? 0..<rows[0].count
+    var scalars: [Double] = []
+    scalars.reserveCapacity(rowIndices.count * columnIndices.count)
+    for row in rows {
+      scalars.append(contentsOf: row)
+    }
+    self.init(scalars, blockIndices: [MatrixRange(rowIndices: rowIndices, columnIndices: columnIndices)])
+  }
+
+  public init(eye dimension: Int) {
+    let zeros = Array(repeating: Double(0), count: dimension)
+    var rows: [[Double]] = Array(repeating: zeros, count: dimension)
+    for i in 0..<dimension {
+      rows[i][i] = 1
+    }
+    self.init(rows)
   }
 }
 
 extension SparseMatrix {
-  public func offsetting(rowBy offset: Int) -> SparseMatrix {
+  public var rowCount: Int {
+    return blockIndices.map { $0.rowIndices.upperBound }.max() ?? 0
+  }
+
+  public var columnCount: Int {
+    return blockIndices.map { $0.columnIndices.upperBound }.max() ?? 0
+  }
+
+  public var tensor: Tensor<Double> {
+    var tensor = Tensor<Double>(zeros: [rowCount, columnCount])
+    var scalarIndex = 0
+    for block in blockIndices {
+      for i in block.rowIndices {
+        for j in block.columnIndices {
+          tensor[i, j] = Tensor(scalars[scalarIndex])
+          scalarIndex += 1
+        }
+      }
+    }
+    return tensor
+  }
+}
+
+extension SparseMatrix {
+  public func blocksEqual(_ other: SparseMatrix) -> Bool {
+    return self.blockIndices == other.blockIndices && self.scalars == other.scalars
+  }
+}
+
+extension SparseMatrix {
+  public func offsetting(rowBy rowOffset: Int = 0, columnBy columnOffset: Int = 0) -> SparseMatrix {
     return SparseMatrix(
       scalars,
       blockIndices: blockIndices.map { block in
         return MatrixRange(
-          rowRange: block.rowRange.offsetting(by: offset),
-          columnRange: block.columnRange
+          rowIndices: block.rowIndices.offsetting(by: rowOffset),
+          columnIndices: block.columnIndices.offsetting(by: columnOffset)
         )
       }
     )
@@ -262,19 +342,31 @@ extension SparseMatrix {
     lhs.blockIndices.append(contentsOf: rhs.blockIndices)
   }
 
+  public static func + (_ lhs: SparseMatrix, _ rhs: SparseMatrix) -> SparseMatrix {
+    var result = lhs
+    result += rhs
+    return result
+  }
+
   public static var zero: SparseMatrix {
     return SparseMatrix([], blockIndices: [])
   }
 }
 
 extension SparseMatrix {
+  public static func * (_ lhs: Double, _ rhs: SparseMatrix) -> SparseMatrix {
+    return SparseMatrix(rhs.scalars.map { lhs * $0 }, blockIndices: rhs.blockIndices)
+  }
+}
+
+extension SparseMatrix {
   public static func * (_ lhs: SparseMatrix, _ rhs: Vector) -> Vector {
-    let outputDimension = lhs.blockIndices.map { $0.rowRange.upperBound }.max() ?? 0
+    let outputDimension = lhs.blockIndices.map { $0.rowIndices.upperBound }.max() ?? 0
     var resultScalars = Array(repeating: Double(0), count: outputDimension)
     var scalarsIndex = 0
     for block in lhs.blockIndices {
-      for rowIndex in block.rowRange {
-        for columnIndex in block.columnRange {
+      for rowIndex in block.rowIndices {
+        for columnIndex in block.columnIndices {
           resultScalars[rowIndex] += lhs.scalars[scalarsIndex] * rhs.scalars[columnIndex]
           scalarsIndex += 1
         }
@@ -285,12 +377,12 @@ extension SparseMatrix {
 
   public func dual(_ rhs: Vector) -> Vector {
     let lhs = self
-    let outputDimension = lhs.blockIndices.map { $0.columnRange.upperBound }.max() ?? 0
+    let outputDimension = lhs.blockIndices.map { $0.columnIndices.upperBound }.max() ?? 0
     var resultScalars = Array(repeating: Double(0), count: outputDimension)
     var scalarsIndex = 0
     for block in lhs.blockIndices {
-      for rowIndex in block.rowRange {
-        for columnIndex in block.columnRange {
+      for rowIndex in block.rowIndices {
+        for columnIndex in block.columnIndices {
           resultScalars[columnIndex] += lhs.scalars[scalarsIndex] * rhs.scalars[rowIndex]
           scalarsIndex += 1
         }
