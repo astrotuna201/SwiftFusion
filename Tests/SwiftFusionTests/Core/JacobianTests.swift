@@ -6,8 +6,33 @@ import SwiftFusion
 
 class JacobianTests: XCTestCase {
   static var allTests = [
-    ("testJacobian2D", testJacobian2D)
+    ("testJacobian2D", testJacobian2D),
+    ("testMyJacobian1", testMyJacobian1),
+    ("testMyJacobian2", testMyJacobian2),
   ]
+
+  func testMyJacobian1() {
+    let P = Vector3(3.5,-8.2,4.2)
+    let R = Rot3.fromTangent(Vector3(0.3, 0, 0))
+    let t12 = Vector6(Tensor<Double>(repeating: 0.1, shape: [6]))
+    let t1 = Pose3(R, P)
+    let t2 = Pose3(coordinate: t1.coordinate.global(t12))
+    let prior_factor = PriorFactor(0, t1)
+    var vals = Values()
+    vals.insert(0, AnyDifferentiable(t1)) // should be identity matrix,
+    // but is not (upper left is zero)
+    // Change this to t2, still zero in upper left block
+
+    print(prior_factor.linearize(vals))
+  }
+
+  func testMyJacobian2() {
+    let zero = Pose3(Rot3(), Vector3(0, 0, 0))
+    func f(_ v: Pose3Coordinate) -> Vector6 {
+      return zero.coordinate.local(v)
+    }
+    print(jacobian(of: f, at: zero.coordinate))
+  }
 
   /// tests the Jacobian of a 2D function
   func testJacobian2D() {
