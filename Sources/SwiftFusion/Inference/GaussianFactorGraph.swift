@@ -15,19 +15,19 @@
 /// The least-squares problem of finding `x: Vector` that minimizes the norm of `jacobian * x - b`.
 public struct GaussianFactorGraph {
   /// Jacobian term of the least-squares problem.
-  public var jacobian: SparseMatrix
+  public var jacobian: BlockMatrix
 
   /// Bias term of the least-squares problem.
   public var bias: Vector
 
   /// Creates an empty `GaussianFactorGraph`.
   public init() {
-    self.jacobian = SparseMatrix.zero
+    self.jacobian = BlockMatrix.zero
     self.bias = Vector.zero
   }
 
   /// Creates a `GaussianFactorGraph` with the given `jacobian` and `bias`.
-  public init(jacobian: SparseMatrix, bias: Vector) {
+  public init(jacobian: BlockMatrix, bias: Vector) {
     self.jacobian = jacobian
     self.bias = bias
   }

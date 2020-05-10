@@ -168,7 +168,7 @@ final class Pose2Tests: XCTestCase {
     for _ in 0..<10 {
       assertEqual(
         jacobian(of: identity, at: Pose2(randomWithCovariance: eye(rowCount: 3))).tensor,
-        SparseMatrix(eye: 3).tensor,
+        BlockMatrix(eye: 3).tensor,
         accuracy: 1e-10
       )
     }
@@ -192,7 +192,7 @@ final class Pose2Tests: XCTestCase {
       let lhs = Pose2(randomWithCovariance: eye(rowCount: 3))
       let rhs = Pose2(randomWithCovariance: eye(rowCount: 3))
       let expectedWrtLhs = rhs.inverse().AdjointMatrix
-      let expectedWrtRhs = SparseMatrix(eye: 3)
+      let expectedWrtRhs = BlockMatrix(eye: 3)
       assertEqual(
         jacobian(of: { $0 * rhs }, at: lhs).tensor,
         expectedWrtLhs,
@@ -227,12 +227,12 @@ final class Pose2Tests: XCTestCase {
     // Note that these numbers are a permutation of the corresponding numbers from GTSAM because
     // the SwiftFusion convention for tangent vector is (omega, v) while the GTSAM convention is
     // (v, omega).
-    let expectedWrtLhs = SparseMatrix([
+    let expectedWrtLhs = BlockMatrix([
       [-1.0, 0.0,  0.0],
       [-2.0, 0.0, -1.0],
       [-2.0, 1.0,  0.0]
     ])
-    let expectedWrtRhs = SparseMatrix([
+    let expectedWrtRhs = BlockMatrix([
       [1.0, 0.0, 0.0],
       [0.0, 1.0, 0.0],
       [0.0, 0.0, 1.0]

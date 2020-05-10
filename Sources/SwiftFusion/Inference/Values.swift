@@ -15,7 +15,7 @@ import TensorFlow
 
 /// A dictionary of type-erased differentiable values.
 ///
-/// Is differentiable, with tangent values represented as sparse `SparseVector`s, so that we can
+/// Is differentiable, with tangent values represented as sparse `BlockVector`s, so that we can
 /// efficiently represent derivatives of functions that access few elements.
 public struct Values: Differentiable & KeyPathIterable {
 
@@ -29,15 +29,15 @@ public struct Values: Differentiable & KeyPathIterable {
 
   /// MARK: - Differentiable conformance and related properties and helpers.
 
-  /// The product space of the tangent spaces of `values`, represented as a sparse `SparseVector`.
+  /// The product space of the tangent spaces of `values`, represented as a sparse `BlockVector`.
   ///
   /// If the dimensions of the tangent spaces of `values` are `n0`, `n1`, etc, then:
-  /// - The first `n0` components of the `SparseVector` are the components of the tangent space of
+  /// - The first `n0` components of the `BlockVector` are the components of the tangent space of
   ///   `values[0]`.
-  /// - The next `n1` components of the `SparseVector` are the components of the tangent space of
+  /// - The next `n1` components of the `BlockVector` are the components of the tangent space of
   ///   `values[1]`.
   /// - etc.
-  public typealias TangentVector = SparseVector
+  public typealias TangentVector = BlockVector
 
   /// Dimension of the tangent space.
   ///
@@ -68,20 +68,19 @@ public struct Values: Differentiable & KeyPathIterable {
   }
 
   /// `makeTangentVector[i]` produces a type-erased tangent vector for `values[i]`.
-  private var makeTangentVector: [(SparseVector.Block) -> AnyDerivative] = []
+  private var makeTangentVector: [(BlockVector.Block) -> AnyDerivative] = []
 
   /// Moves `self` along the given `direction`.
   ///
   /// Precondition: `direction` is represented as a single block spanning the entire tangent space.
   /// TODO: We can lift the precondition by handling all the other cases in the implementation.
-  public mutating func move(along direction: SparseVector) {
-    precondition(direction.blocks.count == 1)
-    let block = direction.blocks[0]
-    precondition(block.startIndex == 0)
-    precondition(block.endIndex == tangentDimension)
+  public mutating func move(along direction: BlockVector) {
+    precondition(direction.blockIndices.count == 1)
+    precondition(block.blockIndices.startIndex == 0)
+    precondition(block.blockIndices.endIndex == tangentDimension)
 
     for valueIndex in values.indices {
-      let tangentVector = makeTangentVector[valueIndex](block[tangentIndices(valueIndex)])
+      let tangentVector = makeTangentVector[valueIndex](block.scalars[tangentIndices(valueIndex)])
       values[valueIndex].move(along: tangentVector)
     }
   }
@@ -106,7 +105,7 @@ public struct Values: Differentiable & KeyPathIterable {
   @derivative(of: subscript)
   @usableFromInline
   func vjpSubscript<T: Differentiable>(key: Int, as type: T.Type)
-    -> (value: T, pullback: (T.TangentVector) -> SparseVector)
+    -> (value: T, pullback: (T.TangentVector) -> BlockVector)
     where T.TangentVector: FixedDimensionVector
   {
     let valueIndex = valueIndices[key]!
@@ -114,7 +113,7 @@ public struct Values: Differentiable & KeyPathIterable {
     return (
       values[valueIndex].baseAs(type),
       // This pullback maps `t: T.TangentVector` to `(0, ..., 0, t0, ..., tn, 0, ..., 0)`.
-      { t in SparseVector(t.scalars, indices: indices) }
+      { t in BlockVector(t.scalars, indices: indices) }
     )
   }
 

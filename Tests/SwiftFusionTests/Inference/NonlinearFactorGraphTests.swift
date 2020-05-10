@@ -37,7 +37,7 @@ final class NonlinearFactorGraphTests: XCTestCase {
       
       optimizer.optimize(gfg: gfg, initial: &dx)
       
-      val.move(along: SparseVector(dx.scalars))
+      val.move(along: BlockVector(dx.scalars))
     }
     
     let dumpjson = { (p: Pose2) -> String in

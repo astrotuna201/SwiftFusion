@@ -51,10 +51,7 @@ public final class SimpleGaussianFactorGraph {
   public static func create() -> GaussianFactorGraph {
     var fg = GaussianFactorGraph()
 
-    let I_2x2 = SparseMatrix([
-      [1, 0],
-      [0, 1]
-    ])
+    let I_2x2 = BlockMatrix(eye: 2)
     let I_2x2_x1 = I_2x2.offsetting(columnBy: x1Offset)
     let I_2x2_x2 = I_2x2.offsetting(columnBy: x2Offset)
     let I_2x2_l1 = I_2x2.offsetting(columnBy: l1Offset)
@@ -64,41 +61,37 @@ public final class SimpleGaussianFactorGraph {
       jacobian: 10 * I_2x2_x1,
       bias: (-1) * Vector([1, 1])
     )
-    // fg += JacobianFactor([x1], [10 * I_2x2], -1.0 * Vector2_t(1.0, 1.0))
     // odometry between x1 and x2: x2-x1=[0.2;-0.1]
     fg += GaussianFactorGraph(
       jacobian: (10 * I_2x2_x2) + (-10 * I_2x2_x1),
       bias: Vector([2, -1])
     )
-    //fg += JacobianFactor([x2, x1], [10 * I_2x2, -10 * I_2x2], Vector2_t(2.0, -1.0))
     // measurement between x1 and l1: l1-x1=[0.0;0.2]
     fg += GaussianFactorGraph(
       jacobian: (5 * I_2x2_l1) + (-5 * I_2x2_x1),
       bias: Vector([0, 1.0])
     )
-    // fg += JacobianFactor([l1, x1], [5 * I_2x2, -5 * I_2x2], Vector2_t(0.0, 1.0))
     // measurement between x2 and l1: l1-x2=[-0.2;0.3]
     fg += GaussianFactorGraph(
       jacobian: (-5 * I_2x2_x2) + (5 * I_2x2_l1),
       bias: Vector([-1.0, 1.5])
     )
-    //fg += JacobianFactor([x2, l1], [-5 * I_2x2, 5 * I_2x2], Vector2_t(-1.0, 1.5))
     return fg;
   }
 
   public static func correctDelta() -> Vector {
-    var c = SparseVector.zero
-    c += SparseVector([-0.1, 0.1]).offsetting(by: l1Offset)
-    c += SparseVector([-0.1, -0.1]).offsetting(by: x1Offset)
-    c += SparseVector([0.1, -0.2]).offsetting(by: x2Offset)
+    var c = BlockVector.zero
+    c += BlockVector([-0.1, 0.1]).offsetting(by: l1Offset)
+    c += BlockVector([-0.1, -0.1]).offsetting(by: x1Offset)
+    c += BlockVector([0.1, -0.2]).offsetting(by: x2Offset)
     return Vector(c)
   }
 
   public static func zeroDelta() -> Vector {
-    var c = SparseVector.zero
-    c += SparseVector([0, 0]).offsetting(by: l1Offset)
-    c += SparseVector([0, 0]).offsetting(by: x1Offset)
-    c += SparseVector([0, 0]).offsetting(by: x2Offset)
+    var c = BlockVector.zero
+    c += BlockVector([0, 0]).offsetting(by: l1Offset)
+    c += BlockVector([0, 0]).offsetting(by: x1Offset)
+    c += BlockVector([0, 0]).offsetting(by: x2Offset)
     return Vector(c)
   }
 }
@@ -114,7 +107,7 @@ extension URL {
 public func jacobian<A: Differentiable, B: Differentiable>(
   of f: @differentiable (A) -> B,
   at p: A
-) -> SparseMatrix where A.TangentVector: FixedDimensionVector, B.TangentVector: FixedDimensionVector {
+) -> BlockMatrix where A.TangentVector: FixedDimensionVector, B.TangentVector: FixedDimensionVector {
   // This implementation hijacks `valueWithJacobian` to compute the jacobian. This does type
   // erasure, so it's slower than it has to be, but that's okay because this is just a utility used
   // to test jacobians.
@@ -122,4 +115,3 @@ public func jacobian<A: Differentiable, B: Differentiable>(
   values.insert(0, p)
   return valueWithJacobian(of: { f($0[0, as: A.self]) }, at: values).jacobian
 }
-

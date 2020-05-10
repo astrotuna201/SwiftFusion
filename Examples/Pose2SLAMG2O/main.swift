@@ -69,7 +69,7 @@ func main() {
     let optimizer = CGLS(precision: 1e-6, max_iteration: 500)
     var dx = Vector(zeros: val.tangentDimension)
     optimizer.optimize(gfg: gfg, initial: &dx)
-    val.move(along: SparseVector(dx.scalars))
+    val.move(along: BlockVector(dx.scalars))
     print("Current error: \(problem.graph.error(val))")
   }
   print("Final error: \(problem.graph.error(val))")
