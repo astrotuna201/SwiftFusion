@@ -8,7 +8,7 @@ final class GaussianFactorGraphTests: XCTestCase {
     let j1 = BlockMatrix([[1, 2], [3, 4]])
     let j2 = BlockMatrix([[5, 6], [7, 8]])
     let b1 = Vector([9, 10])
-    let b2 = Vector([11, 11])
+    let b2 = Vector([11, 12])
     graph += GaussianFactorGraph(jacobian: j1, bias: b1)
     graph += GaussianFactorGraph(jacobian: j2, bias: b2)
 
@@ -18,4 +18,8 @@ final class GaussianFactorGraphTests: XCTestCase {
       Vector([9, 10, 11, 12])
     )
   }
+
+  static var allTests = [
+    ("testAccumulateFactors", testAccumulateFactors)
+  ]
 }

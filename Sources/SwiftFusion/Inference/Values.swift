@@ -76,8 +76,8 @@ public struct Values: Differentiable & KeyPathIterable {
   /// TODO: We can lift the precondition by handling all the other cases in the implementation.
   public mutating func move(along direction: BlockVector) {
     precondition(direction.blockIndices.count == 1)
-    precondition(direction.blockIndices.startIndex == 0)
-    precondition(direction.blockIndices.endIndex == tangentDimension)
+    precondition(direction.blockIndices[0].startIndex == 0)
+    precondition(direction.blockIndices[0].endIndex == tangentDimension)
 
     for valueIndex in values.indices {
       let tangentVector =
