@@ -4,6 +4,7 @@ import XCTest
 public func allTests() -> [XCTestCaseEntry] {
   [
     testCase(AnyDifferentiableTests.allTests),
+    testCase(BlockVectorTests.allTests),
     testCase(DictionaryDifferentiableTests.allTests),
     testCase(G2OReaderTests.allTests),
     testCase(Rot2Tests.allTests),

@@ -68,7 +68,7 @@ public struct Values: Differentiable & KeyPathIterable {
   }
 
   /// `makeTangentVector[i]` produces a type-erased tangent vector for `values[i]`.
-  private var makeTangentVector: [(BlockVector.Block) -> AnyDerivative] = []
+  private var makeTangentVector: [(ArraySlice<Double>) -> AnyDerivative] = []
 
   /// Moves `self` along the given `direction`.
   ///
@@ -76,11 +76,12 @@ public struct Values: Differentiable & KeyPathIterable {
   /// TODO: We can lift the precondition by handling all the other cases in the implementation.
   public mutating func move(along direction: BlockVector) {
     precondition(direction.blockIndices.count == 1)
-    precondition(block.blockIndices.startIndex == 0)
-    precondition(block.blockIndices.endIndex == tangentDimension)
+    precondition(direction.blockIndices.startIndex == 0)
+    precondition(direction.blockIndices.endIndex == tangentDimension)
 
     for valueIndex in values.indices {
-      let tangentVector = makeTangentVector[valueIndex](block.scalars[tangentIndices(valueIndex)])
+      let tangentVector =
+        makeTangentVector[valueIndex](direction.scalars[tangentIndices(valueIndex)])
       values[valueIndex].move(along: tangentVector)
     }
   }

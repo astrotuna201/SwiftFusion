@@ -1,9 +1,9 @@
-/// A vector stored as a collection of blocks.
+/// A vector stored as a sparse collection of blocks.
 public struct BlockVector {
   /// The indices of the blocks.
   ///
   /// For example, if `blockIndices == [5..<10, 98..<100]`, then the vector has nonzero entries at
-  /// components 5, 6, 7, 8, 9, 98, and 99.
+  /// indices 5, 6, 7, 8, 9, 98, and 99.
   ///
   /// `blockIndices` are allowed to overlap, and overlapping components accumulate by addition.
   @noDerivative public fileprivate(set) var blockIndices: [Range<Int>]
@@ -17,7 +17,10 @@ public struct BlockVector {
 
 /// Initializers.
 extension BlockVector {
-  /// Create a `BlockVector` with the givien `scalars` and `blockIndices`.
+  /// Creates a `BlockVector` with the givien `scalars` and `blockIndices`.
+  ///
+  /// Note: This is fileprivate so that clients use more convienient helpers to initialize
+  /// `BlockVector`s.
   ///
   /// Precondition: `scalars.count` is the same as the sum of all the `blockIndices` counts.
   fileprivate init(_ scalars: [Double], blockIndices: [Range<Int>]) {
@@ -26,16 +29,14 @@ extension BlockVector {
     self.blockIndices = blockIndices
   }
 
-  /// Create a `BlockVector` with components in range `0..<scalars.count` given by `scalars`.
-  public init(_ scalars: [Double]) {
-    self.scalars = scalars
-    self.blockIndices = [scalars.indices]
-  }
-
-  /// Create a `BlockVector` with components in range `indices` given by `scalars`.
+  /// Creates a `BlockVector` with `scalars`.
   ///
-  /// Precondition: `scalars` and `indices` have the same count.
-  public init(_ scalars: [Double], indices: Range<Int>) {
+  /// If `indices` is specified, the scalars are placed at these indices in the `BlockVector`.
+  /// Otherwise, the scalars are places starting at index 0.
+  ///
+  /// Precondition: `scalars` and `indices` (if specified) have the same count.
+  public init(_ scalars: [Double], indices: Range<Int>? = nil) {
+    let indices = indices ?? scalars.indices
     precondition(scalars.count == indices.count)
     self.scalars = scalars
     self.blockIndices = [indices]
@@ -57,15 +58,14 @@ extension Vector {
   }
 }
 
-/// Accessors.
+/// Miscellaneous utilities.
 extension BlockVector {
   /// The dimension of the vector, determined by the highest index defined in a block.
   public var dimension: Int {
     return blockIndices.map { $0.upperBound }.max() ?? 0
   }
-}
 
-extension BlockVector {
+  /// Returns the vector with the indices offset by `offset`.
   public func offsetting(by offset: Int) -> BlockVector {
     return BlockVector(scalars, blockIndices: blockIndices.map { $0.offsetting(by: offset) })
   }
@@ -80,9 +80,8 @@ extension BlockVector: Differentiable {
   }
 }
 
-extension BlockVector: VectorProtocol {
-  public typealias VectorSpaceScalar = Double
-
+/// AdditiveArithmetic conformance.
+extension BlockVector: AdditiveArithmetic {
   public static func += (_ lhs: inout BlockVector, _ rhs: BlockVector) {
     lhs.scalars.append(contentsOf: rhs.scalars)
     lhs.blockIndices.append(contentsOf: rhs.blockIndices)
@@ -104,6 +103,15 @@ extension BlockVector: VectorProtocol {
     result -= rhs
     return result
   }
+
+  public static var zero: BlockVector {
+    return BlockVector([], blockIndices: [])
+  }
+}
+
+/// VectorProtocol conformance.
+extension BlockVector: VectorProtocol {
+  public typealias VectorSpaceScalar = Double
 
   public mutating func add(_ x: Double) {
     for index in withoutDerivative(at: scalars.indices) {
@@ -140,13 +148,10 @@ extension BlockVector: VectorProtocol {
     result.scale(by: scalar)
     return result
   }
-
-  public static var zero: BlockVector {
-    return BlockVector([], blockIndices: [])
-  }
 }
 
-fileprivate extension Range where Bound == Int {
+internal extension Range where Bound == Int {
+  /// Returns `self`, with bounds offset by `offset`.
   func offsetting(by offset: Int) -> Range {
     return (lowerBound + offset)..<(upperBound + offset)
   }
