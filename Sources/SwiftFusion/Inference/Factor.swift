@@ -19,24 +19,14 @@ public protocol Factor {
 }
 
 /// A `NonlinearFactor` corresponds to the `NonlinearFactor` in GTSAM.
-///
-/// Input is a dictionary of `Key` to `Value` pairs, and the output is the scalar
-/// error value
-///
-/// Interpretation
-/// ================
-/// `Input`: the input values as key-value pairs
-///
 public protocol NonlinearFactor: Factor {
   typealias ScalarType = Double
-  
-  /// TODO: `Dictionary` still does not conform to `Differentiable`
-  /// Tracking issue: https://bugs.swift.org/browse/TF-899
-//  typealias Input = Dictionary<UInt, Tensor<ScalarType>>
-  
+
   /// Returns the `error` of the factor.
   @differentiable(wrt: values)
   func error(_ values: Values) -> ScalarType
-  
+
+  /// Returns a single-factor `GaussianFactorGraph` containing the linearization of this factor
+  /// around `values`.
   func linearized(_ values: Values) -> GaussianFactorGraph
 }

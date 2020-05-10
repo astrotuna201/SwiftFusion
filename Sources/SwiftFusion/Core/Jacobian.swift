@@ -24,14 +24,3 @@ public func valueWithJacobian<B: Differentiable>(
   let (value, pb) = valueWithPullback(at: p, in: f)
   return (value: value, jacobian: SparseMatrix(rows: B.TangentVector.standardBasis.map(pb)))
 }
-
-/// https://bugs.swift.org/browse/SR-12762
-public func jacobian<A: Differentiable, B: Differentiable>(
-  of f: @differentiable (A) -> B,
-  at p: A
-) -> SparseMatrix where A.TangentVector: FixedDimensionVector, B.TangentVector: FixedDimensionVector {
-  var values = Values()
-  values.insert(0, p)
-  return valueWithJacobian(of: { f($0[0, as: A.self]) }, at: values).jacobian
-}
-

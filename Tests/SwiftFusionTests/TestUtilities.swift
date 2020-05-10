@@ -109,3 +109,17 @@ extension URL {
     return URL(fileURLWithPath: file).deletingLastPathComponent()
   }
 }
+
+/// Returns the jacobian matrix of `f` at the given point.
+public func jacobian<A: Differentiable, B: Differentiable>(
+  of f: @differentiable (A) -> B,
+  at p: A
+) -> SparseMatrix where A.TangentVector: FixedDimensionVector, B.TangentVector: FixedDimensionVector {
+  // This implementation hijacks `valueWithJacobian` to compute the jacobian. This does type
+  // erasure, so it's slower than it has to be, but that's okay because this is just a utility used
+  // to test jacobians.
+  var values = Values()
+  values.insert(0, p)
+  return valueWithJacobian(of: { f($0[0, as: A.self]) }, at: values).jacobian
+}
+
