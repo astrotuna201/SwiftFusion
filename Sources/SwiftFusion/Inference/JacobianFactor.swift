@@ -11,12 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import TensorFlow
-
 /// A `LinearFactor` that operates like `JacobianFactor` in GTSAM.
 ///
 /// Input is a dictionary of `Key` to `Tensor` pairs, and the output is the paired
-/// error vector. Note here that the Tensor shapes are not checked.
+/// error vector. Note here that the shapes are not checked.
 ///
 /// Interpretation
 /// ================
@@ -39,21 +37,22 @@ import TensorFlow
 /// and `HessianFactor` conform to this protocol instead.
 public struct JacobianFactor: LinearFactor {
   
-  @differentiable(wrt: values)
-  public func error(_ indices: [Int], values: Tensor<ScalarType>) -> ScalarType {
+  // TODO(fan): correct this and add a unit test
+  public func error(_ values: VectorValues) -> ScalarType {
     ScalarType.zero
   }
+  
   public var dimension: Int {
     get {
-      jacobians[0].shape.dimensions[0]
+      jacobians[0].rowCount
     }
   }
-  public var keys: Array<Int> = []
-  public var jacobians: Array<Tensor<Double>> = []
-  public var b: Tensor<Double> = eye(rowCount: 0)
+  public var keys: Array<Int>
+  public var jacobians: Array<Matrix>
+  public var b: Vector
   public typealias Output = Error
   
-  public init (_ key: [Int], _ A: [Tensor<Double>], _ b: Tensor<Double>) {
+  public init (_ key: [Int], _ A: [Matrix], _ b: Vector) {
     keys = key
     jacobians = A
     self.b = b
@@ -68,11 +67,11 @@ public struct JacobianFactor: LinearFactor {
   ///                 x3
   /// ```
   static func * (lhs: JacobianFactor, rhs: VectorValues) -> Self.Output {
-    var arr: Array<Tensor<Double>> = []
+    var result = Vector(zeros: lhs.dimension)
     for i in lhs.keys.indices {
-      arr.append(matmul(lhs.jacobians[i], rhs[lhs.keys[i]]))
+      result += matvec(lhs.jacobians[i], rhs[lhs.keys[i]])
     }
-    return arr.reduce(Tensor<Double>(repeating: 0.0, shape: TensorShape([lhs.dimension, 1])), { $0 + $1 })
+    return result
   }
   
   /// Calculate `J^T * e`
@@ -97,11 +96,48 @@ public struct JacobianFactor: LinearFactor {
       
       // TODO(fan): add a proper method for searching key
       if let ind = result._indices[k] {
-        result._values[ind] += matmul(jacobians[pos].transposed(), r)
+        result._values[ind] += matvec(jacobians[pos], transposed: true, r)
       } else {
-        result.insert(k, matmul(jacobians[pos].transposed(), r))
+        result.insert(k, matvec(jacobians[pos], transposed: true, r))
       }
     }
     return result
+  }
+}
+
+extension JacobianFactor {
+  /// Creates a `JacobianFactor` by linearizing the error function `f` at `p`.
+  public init<R: VectorConvertible & TangentStandardBasis>(
+    of f: @differentiable (Values) -> R,
+    at p: Values
+  ) {
+    // Compute the rows of the jacobian.
+    let (value, pb) = valueWithPullback(at: p, in: f)
+    let rows = R.tangentStandardBasis.map { pb($0) }
+
+    // Construct empty matrices with the correct shape.
+    assert(rows.count > 0)
+    var matrices = Dictionary<Int, Matrix>(uniqueKeysWithValues: rows[0].keys.map { key in
+      let row = rows[0][key]
+      var matrix = Matrix([], rowCount: 0, columnCount: row.dimension)
+      matrix.reserveCapacity(rows.count * row.dimension)
+      return (key, matrix)
+    })
+
+    // Fill in the matrix entries.
+    for row in rows {
+      for key in row.keys {
+        matrices[key]!.append(row: row[key])
+      }
+    }
+
+    // Return the jacobian factor with the matrices and value.
+    let orderedKeys = Array(matrices.keys)
+    self = JacobianFactor(
+      orderedKeys,
+      orderedKeys.map { matrices[$0]! },
+      // TODO: remove this negative sign
+      value.vector.scaled(by: -1)
+    )
   }
 }

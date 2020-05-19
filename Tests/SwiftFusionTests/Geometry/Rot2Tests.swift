@@ -42,6 +42,45 @@ final class Rot2Tests: XCTestCase {
     XCTAssertEqual(𝛁actual2, Vector1(1.0))
   }
 
+  // Check derivative for theta value.
+  func testThetaDerivative() {
+    XCTAssertEqual(
+      gradient(at: Rot2(1)) { $0.theta },
+      Vector1(1)
+    )
+  }
+
+  // Check derivative for sine value.
+  func testSinDerivative() {
+    XCTAssertEqual(
+      gradient(at: Rot2(1)) { $0.s },
+      Vector1(cos(1))
+    )
+  }
+
+  // Check derivative for cosine value.
+  func testCosDerivative() {
+    XCTAssertEqual(
+      gradient(at: Rot2(1)) { $0.c },
+      Vector1(-sin(1))
+    )
+  }
+
+  // Check derivative for initialization from theta.
+  func testThetaInitDerivative() {
+    XCTAssertEqual(
+      gradient(at: 1) { Rot2($0).theta },
+      1
+    )
+  }
+
+  // Check derivative for initialization from cosine and sine values.
+  func testCosSinInitDerivative() {
+    let grad1 = gradient(at: 1, 0) { Rot2(c: $0, s: $1).theta }
+    XCTAssertEqual(grad1.0, 0)
+    XCTAssertEqual(grad1.1, 1)
+  }
+
   // Check gradient descent
   func testGradientDescent() {
     var R1 = Rot2(0), R2 = Rot2(1)
@@ -67,11 +106,4 @@ final class Rot2Tests: XCTestCase {
 
     XCTAssertEqual(R1.theta, R2.theta, accuracy: 1e-5)
   }
-
-  static var allTests = [
-    ("testBetweenIdentitiesTrivial", testBetweenIdentitiesTrivial),
-//    ("testBetweenIdentities", testBetweenIdentities),
-    ("testBetweenDerivatives", testBetweenDerivatives),
-//    ("testRot2Derivatives", testRot2Derivatives),
-  ]
 }
